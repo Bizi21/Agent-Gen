@@ -1,0 +1,9 @@
+# Agent-Gen — Python requirements
+
+Agent-Gen is designed to run with **zero third-party dependencies** using only
+the Python standard library (Python 3.9+). The LLM gateway talks HTTP via
+`urllib`; memory and the graph index use `sqlite3`; config uses `.env` + JSON.
+
+# Optional (nicer-to-have, none required):
+# pyyaml>=6.0        # future YAML config support
+# fasttext           # better language detection

@@ -1,0 +1,19 @@
+{
+  "gateway": {
+    "default_provider": "openai",
+    "default_model": "auto",
+    "routing": {}
+  },
+  "limits": {
+    "max_steps": 0,
+    "max_cost_usd": 0,
+    "max_context_tokens": 0,
+    "rate_per_minute": 0
+  },
+  "autonomy": "full",
+  "conversation": { "persist": true, "auto_summarize_at_tokens": 0 },
+  "languages": ["en", "hi"],
+  "default_lang": "auto",
+  "window": { "auto_open": true, "port": 0, "title": "Agent-Gen" },
+  "second_brain": { "vault_path": "./brain/vault", "graph_view": true, "open_in_obsidian": false }
+}

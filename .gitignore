@@ -1,0 +1,27 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local data / derived stores (the versioned Brain itself IS tracked)
+brain/store/
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+data/
+
+# Tooling
+.DS_Store
+node_modules/
+dist/
+build/
