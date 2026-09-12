@@ -152,13 +152,13 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     sub.add_parser("graph", help="print the vault knowledge graph")
     sub.add_parser("ui", help="open the desktop window (web UI)")
+    sub.add_parser("start", help="open the desktop window (same as ui)")
 
     args = parser.parse_args(argv)
-    if not args.cmd:
-        parser.print_help()
-        return 0
-
     config = Config.load()
+    if not args.cmd:
+        # Default: one simple command opens the chat window (the first screen).
+        return cmd_ui(config)
 
     if args.cmd == "init":
         return cmd_init(config)
@@ -174,7 +174,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_ingest(config, args.target)
     if args.cmd == "graph":
         return cmd_graph(config)
-    if args.cmd == "ui":
+    if args.cmd in ("ui", "start"):
         return cmd_ui(config)
 
     parser.print_help()

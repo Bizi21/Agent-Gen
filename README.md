@@ -13,43 +13,45 @@ A **self-improving AI agent** that:
 
 Everything runs with **zero third-party dependencies** (Python stdlib only).
 
-## Quickstart
+## Quickstart — one command
 
 ```bash
-# 1. (optional) configure providers — copy and edit .env
-cp .env.example .env
+./agent                  # opens the desktop window (chat is the first screen)
+```
 
-# 2. create the brain + vault (idempotent)
-python3 -m agent_gen init
+That single command boots the agent, self-decides its mode and skills, and
+opens the **chat window**. Type a command and watch it work **live** — the work
+log shows the agent *thinking*, *retrieving knowledge from the second brain*,
+*selecting skills*, and *running tools*, before it answers.
 
-# 3. run the eval suite
-python3 -m agent_gen eval
-
-# 4. run the self-improvement loop (the agent learns and commits)
-python3 -m agent_gen improve
-
-# 5. open the desktop window (web UI)
-python3 -m agent_gen ui
+```bash
+./agent eval            # run the eval suite, print a scorecard
+./agent improve         # run the self-improvement loop (the agent learns + commits)
+./agent run "task"      # run a single task
+./agent chat            # interactive chat (REPL)
+./agent ingest <url|file>   # capture external data into the vault
+./agent graph           # print the knowledge graph (notes + links)
 ```
 
 > No API key? No problem. With no keys configured the agent automatically uses
-> a built-in **offline mock LLM**, so `eval`, `improve`, `chat`, and the window
+> a built-in **offline mock LLM**, so the window, `eval`, `improve`, and `chat`
 > all work end-to-end without any network or key. Add keys to `.env` to switch
 > to real providers (OpenAI, Anthropic, Gemini, Mistral, Groq, DeepSeek,
 > Ollama, or any OpenAI-compatible endpoint).
 
-## Commands
+## What happens when you type a command
 
-```
-init                    create the brain + vault
-eval                    run the eval suite, print a scorecard
-improve                 run the improvement loop (learn + commit)
-run "task"              run a single task
-chat                    interactive chat (REPL)
-ingest <url|file>       capture external data into the vault
-graph                   print the knowledge graph (notes + links)
-ui                      open the desktop window (web UI)
-```
+The agent **self-decides** how to work, live in the chat window:
+
+1. **mode** — autonomy level (assisted → semi → auto → full)
+2. **think** — a plan: retrieve knowledge → use tools/skills → answer
+3. **skill** — the skills it selects itself (research / summarize / coder / remember)
+4. **knowledge** — notes retrieved from the second brain
+5. **tool** — tools it runs (search vault, read/write/edit files, ingest URL, …)
+6. **answer** — the final reply, in your language
+
+Try: `search the vault for lessons`, `What is the capital of France?`,
+`remember that my favorite color is blue`, `/eval`, `/improve`.
 
 ## How self-improvement works (M1)
 

@@ -183,6 +183,9 @@ def execute(name: str, args: Dict[str, Any], ctx: ToolContext) -> str:
     if spec is None or spec.executor is None:
         return f"ERROR: unknown tool '{name}'"
     try:
-        return str(spec.executor(ctx, args))
+        # Only forward keys the tool declares, and pass them as keyword args.
+        allowed = set(spec.parameters.keys())
+        kwargs = {k: v for k, v in (args or {}).items() if k in allowed}
+        return str(spec.executor(ctx, **kwargs))
     except Exception as exc:  # noqa: BLE001 - tools must never crash the loop
         return f"ERROR executing {name}: {type(exc).__name__}: {exc}"

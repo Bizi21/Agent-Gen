@@ -1,17 +1,21 @@
 """Desktop window — a local web UI served with the stdlib HTTP server.
 
-Panels: agents roster, chat/work window, and the second brain (notes + graph).
-Served on a single page with inline HTML/CSS/JS — no CDN, works fully offline.
+Panels: agents roster, chat/work window (with a LIVE work log streaming the
+agent's thinking, knowledge retrieval, skills, and tools), and the second
+brain (notes + knowledge graph).
+
+The chat endpoint streams Server-Sent Events (``data: {json}\\n\\n``) so the
+work log updates in real time. No CDN — works fully offline.
 """
 
 from __future__ import annotations
 
 import json
 import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict
 from urllib.parse import urlparse
 
 from .agent import Agent
@@ -32,7 +36,7 @@ INDEX_HTML = r"""<!doctype html>
 <title>Agent-Gen</title>
 <style>
   :root { --bg:#0e1117; --panel:#161b22; --line:#21262d; --text:#e6edf3; --dim:#8b949e;
-          --accent:#2f81f7; --accent2:#3fb950; --danger:#f85149; }
+          --accent:#2f81f7; --accent2:#3fb950; --warn:#d29922; --danger:#f85149; }
   * { box-sizing:border-box; }
   html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
               font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
@@ -50,10 +54,15 @@ INDEX_HTML = r"""<!doctype html>
   .dot.busy { background:var(--accent2); }
   /* chat */
   #messages { flex:1; overflow-y:auto; padding:14px; }
-  .msg { margin:0 0 12px; max-width:82%; padding:10px 12px; border-radius:10px; white-space:pre-wrap; word-wrap:break-word; }
+  .msg { margin:0 0 10px; max-width:86%; padding:10px 12px; border-radius:10px; white-space:pre-wrap; word-wrap:break-word; }
   .msg.user { background:#1c2b3f; margin-left:auto; }
   .msg.agent { background:#1b2430; }
-  .msg.tool { background:#141a22; color:var(--dim); font-size:12px; border:1px solid var(--line); }
+  .msg.work { background:#0d1117; border-left:3px solid var(--accent); color:#9fb2c8;
+              font-size:12.5px; padding:6px 10px; border-radius:0 8px 8px 0; margin:4px 0; max-width:95%; }
+  .msg.work .k { color:var(--accent2); font-weight:600; }
+  .msg.work.tool { border-left-color:var(--warn); }
+  .msg.work.tool .k { color:var(--warn); }
+  .msg.work.think { border-left-color:var(--accent2); }
   #composer { display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--line); }
   #composer input { flex:1; background:#0d1117; color:var(--text); border:1px solid var(--line);
                     border-radius:8px; padding:8px 12px; outline:none; }
@@ -92,7 +101,7 @@ INDEX_HTML = r"""<!doctype html>
     <h2 id="chattitle">Chat / Work window</h2>
     <div id="messages"></div>
     <div id="composer">
-      <input id="input" placeholder="Type a command or a message… (/eval, /improve, or anything)" autocomplete="off">
+      <input id="input" placeholder="Type a command or chat… (e.g. 'search the vault for lessons', 'What is the capital of France?')" autocomplete="off">
       <button id="send">Send</button>
     </div>
   </div>
@@ -129,10 +138,55 @@ function addMsg(role, text) {
   return el;
 }
 
+function addWork(kind, text) {
+  const el = document.createElement('div');
+  el.className = 'msg work ' + kind;
+  const k = document.createElement('span'); k.className = 'k'; k.textContent = '[' + kind + '] ';
+  el.appendChild(k);
+  el.appendChild(document.createTextNode(text));
+  messages.appendChild(el);
+  messages.scrollTop = messages.scrollHeight;
+  return el;
+}
+
 async function post(path, body) {
   const res = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'},
                                  body: JSON.stringify(body||{})});
   return res.json();
+}
+
+function handleEvent(ev) {
+  switch (ev.type) {
+    case 'mode': $('#status').textContent = 'mode: ' + ev.value; break;
+    case 'think': addWork('think', ev.text); break;
+    case 'skill': addWork('skill', 'skill selected: ' + ev.name + (ev.description ? ' — ' + ev.description : '')); break;
+    case 'knowledge': addWork('knowledge', 'second brain: ' + ((ev.notes && ev.notes.length) ? ev.notes.join(', ') : '(nothing relevant)')) ; break;
+    case 'tool_start': addWork('tool', 'tool: ' + ev.name + ' …'); break;
+    case 'tool_end': addWork('tool', 'tool: ' + ev.name + ' → done' + (ev.result ? ' (' + ev.result.length + ' chars)' : '')); break;
+    case 'answer': addMsg('agent', ev.text); break;
+    case 'error': addWork('error', 'error: ' + ev.text); break;
+    case 'done': $('#status').textContent = 'ready · ' + (ev.steps||0) + ' tool step(s) · skills: ' + (ev.skills||[]).join(', ') || 'ready'; break;
+  }
+}
+
+async function streamChat(text) {
+  const res = await fetch('/api/chat', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({message:text})});
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  while (true) {
+    const {done, value} = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, {stream:true});
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      const chunk = buf.slice(0, idx); buf = buf.slice(idx + 2);
+      const line = chunk.split('\n').find(l => l.startsWith('data: '));
+      if (!line) continue;
+      try { handleEvent(JSON.parse(line.slice(6))); } catch(e) {}
+    }
+  }
 }
 
 async function send() {
@@ -141,14 +195,13 @@ async function send() {
   if (!text) return;
   input.value = '';
   addMsg('user', text);
-  $('#status').textContent = 'working…';
+  $('#status').textContent = 'thinking…';
   if (text === '/eval' || text === '/improve') {
     const r = await post('/api/' + text.slice(1));
     const el = addMsg('agent', r.text || JSON.stringify(r));
     if (r.text && r.text.length > 600) el.innerHTML = '<pre class="sc">' + escapeHtml(r.text) + '</pre>';
   } else {
-    const r = await post('/api/chat', {message:text});
-    addMsg('agent', r.reply || '');
+    await streamChat(text);
   }
   $('#status').textContent = 'ready';
   refresh();
@@ -159,7 +212,7 @@ function escapeHtml(s){return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;',
 async function refresh() {
   const st = await (await fetch('/api/state')).json();
   graphData = st.graph;
-  $('#metrics').textContent = st.notes + ' notes · ' + st.edges + ' links';
+  $('#metrics').textContent = st.notes + ' notes · ' + st.edges + ' links · mode: ' + st.autonomy;
   drawGraph();
   renderNotes(st);
 }
@@ -186,11 +239,10 @@ function drawGraph() {
   const nodes = graphData.nodes.filter(n => !n.id.startsWith('tag:'));
   const tags = graphData.nodes.filter(n => n.id.startsWith('tag:'));
   const pos = {};
-  nodes.forEach((n,i)=>{ const a = (i/nodes.length)*Math.PI*2;
+  nodes.forEach((n,i)=>{ const a = (i/Math.max(nodes.length,1))*Math.PI*2;
     pos[n.id] = {x: W/2 + Math.cos(a)*(W*0.32), y: H/2 + Math.sin(a)*(H*0.32), n}; });
   tags.forEach((n,i)=>{ const a = (i/Math.max(tags.length,1))*Math.PI*2;
     pos[n.id] = {x: W/2 + Math.cos(a)*(W*0.16), y: H/2 + Math.sin(a)*(H*0.16), n}; });
-  // a few relaxation iterations
   for (let iter=0; iter<40; iter++) {
     const keys = Object.keys(pos);
     for (let a=0;a<keys.length;a++) for (let b=a+1;b<keys.length;b++) {
@@ -240,6 +292,7 @@ $('#evalbtn').onclick = async () => { $('#input').value='/eval'; send(); };
 $('#improvebtn').onclick = async () => { $('#input').value='/improve'; send(); };
 $('#graphbtn').onclick = refresh;
 window.addEventListener('resize', drawGraph);
+$('#input').focus();
 refresh();
 </script>
 </body>
@@ -272,9 +325,13 @@ class _Runtime:
             "autonomy": self.config.autonomy,
         }
 
-    def chat(self, message: str) -> str:
+    def chat_stream(self, message: str, emit: Callable[[Dict[str, Any]], None]) -> None:
+        def paced(ev: Dict[str, Any]) -> None:
+            emit(ev)
+            if ev.get("type") not in ("done", "error"):
+                time.sleep(0.07)  # small pacing so the work log feels live
         with self.lock:
-            return self.agent.run(message).answer
+            self.agent.run_stream(message, emit=paced)
 
     def eval(self) -> str:
         with self.lock:
@@ -304,7 +361,7 @@ def _make_handler(runtime: "_Runtime"):
 
         def do_GET(self):
             path = urlparse(self.path).path
-            if path == "/" or path == "/index.html":
+            if path in ("/", "/index.html"):
                 self._send(200, INDEX_HTML.encode("utf-8"), "text/html; charset=utf-8")
             elif path == "/api/state":
                 self._send(200, json.dumps(runtime.state()).encode("utf-8"))
@@ -319,11 +376,34 @@ def _make_handler(runtime: "_Runtime"):
                 payload = json.loads(raw or b"{}")
             except json.JSONDecodeError:
                 payload = {}
+
+            # --- streaming chat (SSE) ----------------------------------- #
+            if path == "/api/chat":
+                message = str(payload.get("message", ""))
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "close")
+                self.end_headers()
+
+                def emit(ev: Dict[str, Any]) -> None:
+                    try:
+                        data = json.dumps(ev, ensure_ascii=False)
+                        self.wfile.write(("data: " + data + "\n\n").encode("utf-8"))
+                        self.wfile.flush()
+                    except OSError:
+                        pass
+
+                try:
+                    runtime.chat_stream(message, emit)
+                except Exception as exc:  # noqa: BLE001
+                    emit({"type": "error", "text": str(exc)})
+                self.close_connection = True
+                return
+
+            # --- JSON endpoints ----------------------------------------- #
             try:
-                if path == "/api/chat":
-                    reply = runtime.chat(str(payload.get("message", "")))
-                    self._send(200, json.dumps({"reply": reply}).encode("utf-8"))
-                elif path == "/api/eval":
+                if path == "/api/eval":
                     self._send(200, json.dumps({"text": runtime.eval()}).encode("utf-8"))
                 elif path == "/api/improve":
                     self._send(200, json.dumps({"text": runtime.improve()}).encode("utf-8"))

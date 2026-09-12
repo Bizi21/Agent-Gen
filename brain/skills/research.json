@@ -1,0 +1,7 @@
+{
+  "name": "research",
+  "description": "Search the second brain and the web, then synthesize a sourced answer.",
+  "keywords": ["research", "find", "look up", "search", "what is", "who", "why", "how", "explain", "wikipedia", "source"],
+  "prompt": "You are researching. Check the second brain first, cite sources, and prefer verifiable facts.",
+  "tools": ["vault_search", "ingest_url"]
+}

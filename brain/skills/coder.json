@@ -1,0 +1,7 @@
+{
+  "name": "coder",
+  "description": "Read, write, and edit code and files.",
+  "keywords": ["code", "write", "script", "function", "debug", "fix", "python", "program", "implement"],
+  "prompt": "You are coding. Write clean, tested code; prefer small correct changes.",
+  "tools": ["read_file", "write_file", "edit_file", "list_dir"]
+}

@@ -67,6 +67,48 @@ DEFAULT_AGENT_JSON = """{
 }
 """
 
+SEED_SKILLS = [
+    {
+        "name": "research",
+        "description": "Search the second brain and the web, then synthesize a sourced answer.",
+        "keywords": ["research", "find", "look up", "search", "what is", "who", "why", "how", "explain", "wikipedia", "source"],
+        "prompt": "You are researching. Check the second brain first, cite sources, and prefer verifiable facts.",
+        "tools": ["vault_search", "ingest_url"],
+    },
+    {
+        "name": "summarize",
+        "description": "Condense text into a short, structured summary.",
+        "keywords": ["summarize", "summary", "tldr", "brief", "condense", "short version"],
+        "prompt": "You are summarizing. Keep it short, structured, and faithful to the source.",
+        "tools": ["vault_search"],
+    },
+    {
+        "name": "coder",
+        "description": "Read, write, and edit code and files.",
+        "keywords": ["code", "write", "script", "function", "debug", "fix", "python", "program", "implement"],
+        "prompt": "You are coding. Write clean, tested code; prefer small correct changes.",
+        "tools": ["read_file", "write_file", "edit_file", "list_dir"],
+    },
+    {
+        "name": "remember",
+        "description": "Store durable knowledge into the second brain.",
+        "keywords": ["remember", "save", "note this", "memorize", "keep this"],
+        "prompt": "You are filing knowledge. Write durable notes into the second brain.",
+        "tools": ["remember", "vault_write_note"],
+    },
+]
+
+
+def ensure_skills(config: Config) -> None:
+    """Write the seed skills into ``brain/skills`` if missing (idempotent)."""
+    skills_dir = config.brain_dir / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    for skill in SEED_SKILLS:
+        target = skills_dir / (skill["name"] + ".json")
+        if not target.exists():
+            import json
+            target.write_text(json.dumps(skill, indent=2) + "\n", encoding="utf-8")
+
 
 def ensure_brain(config: Config) -> None:
     """Create prompt/, config/, and the vault structure if missing (idempotent)."""
@@ -82,6 +124,8 @@ def ensure_brain(config: Config) -> None:
     cfg_file = cfg_dir / "agent.json"
     if not cfg_file.exists():
         cfg_file.write_text(DEFAULT_AGENT_JSON, encoding="utf-8")
+
+    ensure_skills(config)
 
     vault = Vault(config.vault_path)
     # seed notes if they don't exist yet

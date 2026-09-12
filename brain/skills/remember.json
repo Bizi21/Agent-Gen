@@ -1,0 +1,7 @@
+{
+  "name": "remember",
+  "description": "Store durable knowledge into the second brain.",
+  "keywords": ["remember", "save", "note this", "memorize", "keep this"],
+  "prompt": "You are filing knowledge. Write durable notes into the second brain.",
+  "tools": ["remember", "vault_write_note"]
+}

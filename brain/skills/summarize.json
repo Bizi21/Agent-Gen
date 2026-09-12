@@ -1,0 +1,7 @@
+{
+  "name": "summarize",
+  "description": "Condense text into a short, structured summary.",
+  "keywords": ["summarize", "summary", "tldr", "brief", "condense", "short version"],
+  "prompt": "You are summarizing. Keep it short, structured, and faithful to the source.",
+  "tools": ["vault_search"]
+}
