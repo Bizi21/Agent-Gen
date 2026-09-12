@@ -12,6 +12,7 @@ defaults. Every limit accepts ``0`` / ``none`` to mean "unlimited".
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -153,6 +154,14 @@ class Config:
     def load(cls, root: Optional[Path] = None) -> "Config":
         root = (root or repo_root()).resolve()
         env = parse_env_file(root / ".env")
+        # Real (shell-exported) environment variables take precedence over
+        # values in the .env file, so `AGENT_GEN_UI_HOST=0.0.0.0 python -m ...`
+        # works without editing the file.
+        env.update({k: v for k, v in os.environ.items() if k.startswith("AGENT_GEN_")
+                    or k in set(PROVIDER_KEY_ENV.values()) | {"OLLAMA_BASE_URL", "OLLAMA_MODEL",
+                                                              "CUSTOM_BASE_URL", "CUSTOM_API_KEY",
+                                                              "CUSTOM_MODEL", "AZURE_OPENAI_ENDPOINT",
+                                                              "AZURE_OPENAI_DEPLOYMENT", "OPENAI_BASE_URL"}})
         json_data: Dict[str, Any] = {}
         cfg_json = root / "brain" / "config" / "agent.json"
         if cfg_json.exists():
