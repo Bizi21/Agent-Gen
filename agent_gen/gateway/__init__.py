@@ -5,6 +5,7 @@ from .mock import MockLLM
 from .openai_compat import OpenAICompatLLM
 from .anthropic import AnthropicLLM
 from .google import GoogleLLM
+from .resilient import ResilientLLM
 from .registry import build_llm, resolve_llm
 
 __all__ = [
@@ -17,6 +18,7 @@ __all__ = [
     "OpenAICompatLLM",
     "AnthropicLLM",
     "GoogleLLM",
+    "ResilientLLM",
     "build_llm",
     "resolve_llm",
 ]

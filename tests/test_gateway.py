@@ -27,7 +27,8 @@ class TestMockLLM(unittest.TestCase):
 
 class TestRegistry(unittest.TestCase):
     def test_falls_back_to_mock_without_keys(self):
-        config = Config.load()
+        from tests.helpers import make_tmp_root
+        config = Config.load(make_tmp_root())  # no .env -> no keys -> mock
         llm = resolve_llm("chat", config)
         self.assertIsInstance(llm, MockLLM)
 

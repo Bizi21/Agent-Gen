@@ -15,6 +15,7 @@ from .base import LLM
 from .google import GoogleLLM
 from .mock import MockLLM
 from .openai_compat import OpenAICompatLLM
+from .resilient import ResilientLLM
 
 # OpenAI-compatible providers that need a key.
 KEYED_COMPAT = {"openai", "mistral", "groq", "deepseek", "together", "openrouter", "cohere"}
@@ -32,17 +33,19 @@ def build_llm(provider: str, model: str, config: Config) -> LLM:
 
     if provider == "anthropic":
         if key:
-            return AnthropicLLM(api_key=key, model=model)
+            return ResilientLLM(AnthropicLLM(api_key=key, model=model))
         return _fallback(provider, "no ANTHROPIC_API_KEY")
 
     if provider == "google":
         if key:
-            return GoogleLLM(api_key=key, model=model)
+            return ResilientLLM(GoogleLLM(api_key=key, model=model))
         return _fallback(provider, "no GOOGLE_API_KEY")
 
     if provider in KEYED_COMPAT:
         if key and base:
-            return OpenAICompatLLM(base_url=base, api_key=key, model=model)
+            llm = OpenAICompatLLM(base_url=base, api_key=key, model=model)
+            llm.name = provider  # friendlier than "openai-compatible"
+            return ResilientLLM(llm)
         return _fallback(provider, f"no key/base_url (set the key in .env)")
 
     if provider == "ollama":
@@ -51,7 +54,9 @@ def build_llm(provider: str, model: str, config: Config) -> LLM:
 
     if provider == "custom":
         if base:
-            return OpenAICompatLLM(base_url=base, api_key=key, model=model)
+            llm = OpenAICompatLLM(base_url=base, api_key=key, model=model)
+            llm.name = "custom"
+            return ResilientLLM(llm)
         return _fallback(provider, "no CUSTOM_BASE_URL")
 
     if provider == "azure":

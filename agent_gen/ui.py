@@ -503,7 +503,9 @@ async function refresh(){
   $('#autolabel').textContent = st.autonomy || 'full';
   const [p, m] = st.route || ['',''];
   const llm = st.llm || '';
-  $('#modelpill').textContent = llm === 'mock' ? 'offline mock LLM' : (p||'') + (m ? ' / ' + m : '');
+  if (st.degraded) { $('#modelpill').textContent = 'offline fallback ('+llm+' unreachable)'; $('#modelpill').style.color='var(--warn)'; }
+  else if (llm === 'mock') { $('#modelpill').textContent = 'offline mock LLM'; }
+  else { $('#modelpill').textContent = llm + (m ? ' / ' + m : ''); }
   $('#ver').textContent = st.version || ''; $('#statver').textContent = st.version ? 'agent-gen '+st.version : '';
   layoutDirty = true;
   drawGraph(); renderNotes(); renderLegend();
@@ -759,6 +761,7 @@ class _Runtime:
             })
         provider, model = self.config.route("chat")
         llm_name = getattr(self.agent.llm, "name", type(self.agent.llm).__name__)
+        degraded = bool(getattr(self.agent.llm, "degraded", False))
         return {
             "graph": graph,
             "notes": len(notes),
@@ -768,6 +771,7 @@ class _Runtime:
             "provider": provider,
             "model": model,
             "llm": llm_name,
+            "degraded": degraded,
             "route": [provider, model],
             "version": __version__,
         }
